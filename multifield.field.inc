@@ -529,10 +529,25 @@ function multifield_field_widget_info() {
 function multifield_field_attach_form($entity_type, $entity, &$form, &$form_state, $langcode) {
   foreach (field_info_instances($entity_type, $form['#bundle']) as $field_name => $instance) {
     $field = field_info_field($field_name);
-    if (multifield_extract_multifield_machine_name($field) && $field['cardinality'] == FIELD_CARDINALITY_UNLIMITED && !empty($field['settings']['hide_blank_items']) && field_access('edit', $field, $entity_type) ) {
+    if (multifield_extract_multifield_machine_name($field) && $field['cardinality'] == FIELD_CARDINALITY_UNLIMITED && !empty($field['settings']['hide_blank_items']) && field_access('edit', $field, $entity_type)) {
       $element_langcode = $form[$field_name]['#language'];
       if ($form[$field_name][$element_langcode]['#max_delta'] > 0) {
         $form[$field_name][$element_langcode]['#max_delta']--;
+      }
+    }
+
+    if ($field['type'] == 'multifield'
+        && $field['cardinality'] == FIELD_CARDINALITY_UNLIMITED
+        && empty($form_state['programmed'])
+        && field_access('edit', $field, $entity_type)
+        && $instance['widget']['type'] == 'multifield_default') {
+
+      $element_langcode = $form[$field_name]['#language'];
+      $element_wrapper = $form[$field_name][$element_langcode]['add_more']['#ajax']['wrapper'];
+      for ($i = 0; $i <= $form[$field_name][$element_langcode]['#max_delta']; $i++) {
+        if (isset($form[$field_name][$element_langcode][$i]['actions']['remove_button'])) {
+          $form[$field_name][$element_langcode][$i]['actions']['remove_button']['#ajax']['wrapper'] = $element_wrapper;
+        }
       }
     }
   }
@@ -606,22 +621,26 @@ function multifield_field_widget_form(&$form, &$form_state, $field, $instance, $
     //),
     '#pre_render' => array('_multifield_show_only_if_visible_children'),
   );
-  $element['actions']['remove_button'] = array(
-    '#type' => 'submit',
-    '#value' => t('Remove'),
-    '#name' => implode('_', $element['#parents']) . '_remove_button',
-    '#delta' => $delta,
-    '#submit' => array('multifield_field_widget_remove_item_submit'),
-    '#limit_validation_errors' => array(),
-    '#ajax' => array(
-      'path' => 'multifield/field-remove-item/ajax',
-      'effect' => 'fade',
-    ),
-    '#attributes' => array(
-      'class' => array('remove-button', 'delta-' . $delta),
-    ),
-    '#access' => $field['cardinality'] == FIELD_CARDINALITY_UNLIMITED && !$is_default_value_widget,
-  );
+
+  if ($field['cardinality'] == FIELD_CARDINALITY_UNLIMITED && empty($form_state['programmed'])) {
+    $element['actions']['remove_button'] = array(
+      '#type' => 'submit',
+      '#value' => t('Remove'),
+      '#name' => implode('_', $element['#parents']) . '_remove_button',
+      '#delta' => $delta,
+      '#submit' => array('multifield_field_widget_remove_item_submit'),
+      '#limit_validation_errors' => array(),
+      '#ajax' => array(
+        // 'wrapper' is filled in multifield_field_attach_form().
+        'callback' => 'multifield_field_widget_remove_item_ajax',
+        'effect' => 'fade',
+      ),
+      '#attributes' => array(
+        'class' => array('remove-button', 'delta-' . $delta),
+      ),
+      '#access' => $field['cardinality'] == FIELD_CARDINALITY_UNLIMITED && !$is_default_value_widget,
+    );
+  }
 
   _multifield_field_attach_form('multifield', $pseudo_entity, $element, $form_state, LANGUAGE_NONE);
   // Restore the internal entity type and bundle properties.
@@ -675,48 +694,32 @@ function multifield_field_widget_validate($element, &$form_state) {
 }
 
 /**
- * Page callback to handle AJAX for removing a multifield item.
+ * AJAX callback for removing a field collection item.
+ *
+ * This returns the new page content to replace the page content made obsolete
+ * by the form submission.
  *
  * Copied from field_collection_remove_js().
  *
- * This is a direct page callback. The actual job of deleting the item is
- * done in the submit handler for the button, so all we really need to
- * do is process the form and then generate output. We generate this
- * output by doing a replace command on the id of the entire form element.
+ * @see multifield_field_widget_remove_item_submit()
  */
-function multifield_field_widget_remove_item_ajax() {
-  require_once DRUPAL_ROOT . '/includes/form.inc';
-
-  // drupal_html_id() very helpfully ensures that all html IDS are unique
-  // on a page. Unfortunately what it doesn't realize is that the IDs
-  // we are generating are going to replace IDs that already exist, so
-  // this actually works against us.
-  if (isset($_POST['ajax_html_ids'])) {
-    unset($_POST['ajax_html_ids']);
-  }
-
-  list($form, $form_state, $form_id, $form_build_id, $commands) = ajax_get_form();
-  drupal_process_form($form['#form_id'], $form, $form_state);
-
-  // Get the information on what we're removing.
+function multifield_field_widget_remove_item_ajax($form, $form_state) {
   $button = $form_state['triggering_element'];
-  // Go two levels up in the form, to the whole widget.
-  $element = drupal_array_get_nested_value($form, array_slice($button['#array_parents'], 0, -4));
-  // Now send back the proper AJAX command to replace it.
-  $commands[] = ajax_command_replace('#' . $element['#id'], drupal_render($element));
-  $return = array(
-    '#type' => 'ajax',
-    '#commands' => $commands,
-  );
 
-  // Because we're doing this ourselves, messages aren't automatic. We have
-  // to add them.
-  $messages = theme('status_messages');
-  if ($messages) {
-    $return['#commands'][] = ajax_command_prepend('#' . $element['#id'], $messages);
+  // Go one level up in the form, to the widgets container.
+  $element = drupal_array_get_nested_value($form, array_slice($button['#array_parents'], 0, -3));
+  $field_name = $element['#field_name'];
+  $langcode = $element['#language'];
+  $parents = $element['#field_parents'];
+
+  $field_state = field_form_get_state($parents, $field_name, $langcode, $form_state);
+
+  $field = $field_state['field'];
+  if ($field['cardinality'] != FIELD_CARDINALITY_UNLIMITED) {
+    return;
   }
 
-  return $return;
+  return $element;
 }
 
 /**

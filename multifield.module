@@ -62,16 +62,6 @@ function multifield_menu() {
     'weight' => 100,
   );
 
-  $info['multifield/field-remove-item/ajax'] = array(
-    'title' => 'Remove item callback',
-    'page callback' => 'multifield_field_widget_remove_item_ajax',
-    'delivery callback' => 'ajax_deliver',
-    'access callback' => TRUE,
-    'theme callback' => 'ajax_base_page_theme',
-    'type' => MENU_CALLBACK,
-    'file' => 'multifield.field.inc',
-  );
-
   return $info;
 }
 
