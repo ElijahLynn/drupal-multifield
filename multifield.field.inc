@@ -740,6 +740,7 @@ function multifield_field_widget_remove_item_submit($form, &$form_state) {
 
   // Where in the form we'll find the parent element.
   $address = array_slice($button['#array_parents'], 0, -3);
+  $values_address = array_slice($button['#parents'], 0, -2);
 
   // Go one level up in the form, to the widgets container.
   $parent_element = drupal_array_get_nested_value($form, $address);
@@ -753,15 +754,17 @@ function multifield_field_widget_remove_item_submit($form, &$form_state) {
   // item down one. This will overwrite the item being removed.
   for ($i = $delta; $i <= $field_state['items_count']; $i++) {
     $old_element_address = array_merge($address, array($i + 1));
+    $old_element_values_address = array_merge($values_address, array($i + 1));
     $new_element_address = array_merge($address, array($i));
+    $new_element_values_address = array_merge($values_address, array($i));
 
     $moving_element = drupal_array_get_nested_value($form, $old_element_address);
-    $moving_element_value = drupal_array_get_nested_value($form_state['values'], $old_element_address);
-    $moving_element_input = drupal_array_get_nested_value($form_state['input'], $old_element_address);
+    $moving_element_value = drupal_array_get_nested_value($form_state['values'], $old_element_values_address);
+    $moving_element_input = drupal_array_get_nested_value($form_state['input'], $old_element_values_address);
     $moving_element_field = drupal_array_get_nested_value($form_state['field']['#parents'], $old_element_address);
 
     // Tell the element where it's being moved to.
-    $moving_element['#parents'] = $new_element_address;
+    $moving_element['#parents'] = $new_element_values_address;
 
     // Move the element around.
     form_set_value($moving_element, $moving_element_value, $form_state);
@@ -783,7 +786,7 @@ function multifield_field_widget_remove_item_submit($form, &$form_state) {
   // if I have items weight weights 3 and 4, and I change 4 to 3 but leave
   // the 3, the order of the two 3s now is undefined and may not match what
   // the user had selected.
-  $input = drupal_array_get_nested_value($form_state['input'], $address);
+  $input = drupal_array_get_nested_value($form_state['input'], $values_address);
   // Sort by weight
   uasort($input, '_field_sort_items_helper');
 
@@ -795,7 +798,7 @@ function multifield_field_widget_remove_item_submit($form, &$form_state) {
     }
   }
 
-  drupal_array_set_nested_value($form_state['input'], $address, $input);
+  drupal_array_set_nested_value($form_state['input'], $values_address, $input);
   field_form_set_state($parents, $field_name, $langcode, $form_state, $field_state);
 
   $form_state['rebuild'] = TRUE;
