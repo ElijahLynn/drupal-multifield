@@ -728,9 +728,9 @@ function multifield_field_widget_remove_item_ajax() {
  * When a remove button is submitted, we need to find the item that it
  * referenced and delete it. Since field UI has the deltas as a straight
  * unbroken array key, we have to renumber everything down. Since we do this
- * we *also* need to move all the deltas around in the $form_state['values']
- * and $form_state['input'] so that user changed values follow. This is a bit
- * of a complicated process.
+ * we *also* need to move all the deltas around in the $form_state['values'],
+ * $form_state['input'], and $form_state['field'] so that user changed values
+ * follow. This is a bit of a complicated process.
  */
 function multifield_field_widget_remove_item_submit($form, &$form_state) {
   $button = $form_state['triggering_element'];
@@ -756,6 +756,7 @@ function multifield_field_widget_remove_item_submit($form, &$form_state) {
     $moving_element = drupal_array_get_nested_value($form, $old_element_address);
     $moving_element_value = drupal_array_get_nested_value($form_state['values'], $old_element_address);
     $moving_element_input = drupal_array_get_nested_value($form_state['input'], $old_element_address);
+    $moving_element_field = drupal_array_get_nested_value($form_state['field']['#parents'], $old_element_address);
 
     // Tell the element where it's being moved to.
     $moving_element['#parents'] = $new_element_address;
@@ -763,6 +764,7 @@ function multifield_field_widget_remove_item_submit($form, &$form_state) {
     // Move the element around.
     form_set_value($moving_element, $moving_element_value, $form_state);
     drupal_array_set_nested_value($form_state['input'], $moving_element['#parents'], $moving_element_input);
+    drupal_array_set_nested_value($form_state['field']['#parents'], $moving_element['#parents'], $moving_element_field);
   }
 
   // Then remove the last item. But we must not go negative.
