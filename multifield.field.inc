@@ -695,7 +695,7 @@ function multifield_field_widget_remove_item_ajax() {
     unset($_POST['ajax_html_ids']);
   }
 
-  list($form, $form_state) = ajax_get_form();
+  list($form, $form_state, $form_id, $form_build_id, $commands) = ajax_get_form();
   drupal_process_form($form['#form_id'], $form, $form_state);
 
   // Get the information on what we're removing.
@@ -703,11 +703,10 @@ function multifield_field_widget_remove_item_ajax() {
   // Go two levels up in the form, to the whole widget.
   $element = drupal_array_get_nested_value($form, array_slice($button['#array_parents'], 0, -4));
   // Now send back the proper AJAX command to replace it.
+  $commands[] = ajax_command_replace('#' . $element['#id'], drupal_render($element));
   $return = array(
     '#type' => 'ajax',
-    '#commands' => array(
-      ajax_command_replace('#' . $element['#id'], drupal_render($element))
-    ),
+    '#commands' => $commands,
   );
 
   // Because we're doing this ourselves, messages aren't automatic. We have
